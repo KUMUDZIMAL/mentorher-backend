@@ -7,7 +7,8 @@ export async function POST() {
     const cookie = serialize("token", "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: 'none', // Allows cross-site requests
+
       expires: new Date(0),
       path: "/",
     });
