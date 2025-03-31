@@ -65,14 +65,14 @@ const cosineSimilarityTensor = (vec1: tf.Tensor1D, vec2: tf.Tensor1D): number =>
 
 export async function GET(
   req: Request,
-  { params }: { params: { userId: string } }
+  { params }: { params: Record<string, string> }  // Use generic Record for typing
 ) {
   try {
     // Connect to the database.
     await dbConnect();
 
-    // Extract userId from context.
-    const { userId } = params;
+    // Extract userId from params.
+    const userId = params.userId;
     if (!userId) {
       return NextResponse.json({ error: "UserId not provided in the URL." }, { status: 400 });
     }
