@@ -11,8 +11,9 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': 'https://mentorher-frontend.vercel.app',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  // If needed: 'Access-Control-Allow-Credentials': 'true'
+  'Access-Control-Allow-Credentials': 'true'
 };
+
 
 // Handle preflight OPTIONS requests
 export async function OPTIONS() {
