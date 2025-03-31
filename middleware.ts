@@ -1,28 +1,14 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
+import { NextRequest, NextResponse } from 'next/server';
 
-const SECRET_KEY = process.env.JWT_SECRET || 'your_secret_key';
-
-export async function middleware(request: NextRequest) {
-  const token = request.cookies.get('token')?.value;
-
-  // If no token, redirect to login
-  if (!token) {
-    return NextResponse.redirect(new URL('/auth/login', request.url));
-  }
-
-  try {
-    // Verify the JWT token using jose
-    await jwtVerify(token, new TextEncoder().encode(SECRET_KEY));
-    return NextResponse.next(); // Proceed to the requested route
-  } catch (error) {
-    console.error('Invalid token:', error);
-    return NextResponse.redirect(new URL('/auth/login', request.url)); // Redirect to login on error
-  }
+export function middleware(req: NextRequest) {
+  const response = NextResponse.next();
+  response.headers.set('Access-Control-Allow-Origin', 'https://mentorher-frontend.vercel.app');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.headers.set('Access-Control-Allow-Credentials', 'true');
+  return response;
 }
 
-// Protect specific routes
 export const config = {
-  matcher: ['/Become-mentee','/BecomeMentor','/recommendations/:userId','/create-group','/profile/mentee','/profile/mentor','/room'], // Protect these routes
+  matcher: '/api/:path*',
 };
