@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   
   const token = req.cookies.get('token')?.value;
   if (!token) {
-    console.log("here")
+    console.log("no token found")
     return NextResponse.json({ error: "No token found" }, { status: 401 });
   }
 

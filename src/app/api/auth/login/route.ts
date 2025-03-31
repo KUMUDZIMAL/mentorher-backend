@@ -71,6 +71,7 @@ export async function POST(req: Request) {
       httpOnly: true, 
       secure: process.env.NODE_ENV === 'production',
       path: '/', 
+      sameSite: 'none', // Allow cross-site cookie
       maxAge: 3600 
     });
 
