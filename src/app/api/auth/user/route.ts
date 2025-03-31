@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   
   const token = req.cookies.get('token')?.value;
   if (!token) {
-    
+    console.log("here")
     return NextResponse.json({ error: "No token found" }, { status: 401 });
   }
 
@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     // Ensure the decoded token has the id property
     if (!decoded || !decoded.id) {
     
+      console.log("here 2")
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
@@ -44,6 +45,8 @@ export async function GET(req: NextRequest) {
     }
    
   } catch (error) {
+    
+    console.log("here 3")
     console.error("JWT verification error:", error);
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
