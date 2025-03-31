@@ -8,7 +8,7 @@ const SECRET_KEY = process.env.JWT_SECRET || 'your_secret_key';
 
 // Define CORS headers (must use an explicit origin when sending credentials)
 const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://mentorher.vercel.app',
+  'Access-Control-Allow-Origin': 'https://mentorher-frontend.vercel.app',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Allow-Credentials': 'true',
