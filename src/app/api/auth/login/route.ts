@@ -6,7 +6,7 @@ import { SignJWT } from 'jose';
 
 const SECRET_KEY = process.env.JWT_SECRET || 'your_secret_key';
 
-// Define CORS headers
+// Define CORS headers (must use an explicit origin when sending credentials)
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'https://mentorher-frontend.vercel.app',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -16,17 +16,19 @@ const corsHeaders = {
 
 // OPTIONS handler for preflight requests
 export async function OPTIONS(req: Request) {
+  console.log("OPTIONS preflight request received");
   return new NextResponse(null, {
     status: 204,
     headers: corsHeaders,
   });
 }
 
+// POST handler for login requests
 export async function POST(req: Request) {
   try {
     // Parse the incoming JSON body for credentials.
     const { username, password } = await req.json();
-
+    
     if (!username || !password) {
       return new NextResponse(
         JSON.stringify({ error: 'Missing credentials' }),
@@ -72,10 +74,10 @@ export async function POST(req: Request) {
       maxAge: 3600 
     });
 
-    // Apply CORS headers to the response.
-    for (const [key, value] of Object.entries(corsHeaders)) {
+    // Apply the CORS headers to the response.
+    Object.entries(corsHeaders).forEach(([key, value]) => {
       response.headers.set(key, value);
-    }
+    });
 
     return response;
   } catch (error) {
