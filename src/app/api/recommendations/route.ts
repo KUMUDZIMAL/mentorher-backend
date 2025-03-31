@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { dbConnect } from "../../../../lib/mongodb";
+import { dbConnect } from "../../../lib/mongodb";
 import * as tf from "@tensorflow/tfjs";
-import Mentor2 from "../../../../models/Mentor2";
-import Mentee from "../../../../models/Mentee";
+import Mentor2 from "../../../models/Mentor2";
+import Mentee from "../../../models/Mentee";
 
 // Combine key fields from a mentee into a single text string.
 const combineMentee = (mentee: any): string => {
@@ -63,19 +63,19 @@ const cosineSimilarityTensor = (vec1: tf.Tensor1D, vec2: tf.Tensor1D): number =>
   return (norm1 && norm2) ? dotProduct / (norm1 * norm2) : 0;
 };
 
-export async function GET(
-  request: Request,
-  // Workaround: cast the context to any to avoid type conflicts.
-  context: any
-) {
+export async function GET(request: Request) {
   try {
     // Connect to the database.
     await dbConnect();
 
-    // Extract userId from context.
-    const { userId } = context.params;
+    // Extract userId from query parameters.
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
     if (!userId) {
-      return NextResponse.json({ error: "UserId not provided in the URL." }, { status: 400 });
+      return NextResponse.json(
+        { error: "UserId not provided in the query parameters." },
+        { status: 400 }
+      );
     }
 
     // Retrieve the mentee profile using the provided userId.
@@ -130,7 +130,7 @@ export async function GET(
 
     return NextResponse.json({ recommendations });
   } catch (error) {
-    console.error("Error in GET /api/recommendations/[userId]:", error);
+    console.error("Error in GET /api/recommendations:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
