@@ -19,7 +19,7 @@ export async function POST(req: Request) {
 
   // Find the user by username.
   const user = await User.findOne({ username });
-
+  console.log('User found:', Boolean(user));
   if (!user) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
   }
