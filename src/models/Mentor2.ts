@@ -1,5 +1,6 @@
 import mongoose, { Schema, model, models } from "mongoose";
 import { boolean } from "zod";
+import User from "./User";
 
 const MentorSchema = new Schema(
   {

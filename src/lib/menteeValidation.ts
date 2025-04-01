@@ -2,49 +2,59 @@ import { z } from "zod";
 
 export const menteeFormSchema = z.object({
   // Personal Information
-  fullName: z.string().optional(),
-  email: z.string().optional(),
-  phone: z.string().optional(),
-  profilePhoto: z.any().optional(),
-  
+  fullName: z.string().nonempty("Full Name is required"),
+  email: z.string().nonempty("Email is required").email("Please enter a valid email address"),
+  phone: z.string().nonempty("Phone number is required"),
+  profilePhoto: z.any(), // Adjust validation as needed for your image type
+
   // Background & Goals
   currentStatus: z.enum(["student", "employed", "career_transition", "unemployed"], {
     errorMap: () => ({ message: "Please select your current status" }),
-  }).optional(),
-  education: z.string().optional(),
-  fieldOfStudy: z.string().optional(),
-  careerGoals: z.string().optional(),
-  
+  }),
+  education: z.string().nonempty("Education is required"),
+  fieldOfStudy: z.string().nonempty("Field of Study is required"),
+  careerGoals: z.string().nonempty("Career goals are required"),
+
   // Technical Background
-  technicalBackground: z.string().optional(),
-  technicalSkills: z.array(z.string()).optional(),
-  
+  technicalBackground: z.string().nonempty("Technical background is required"),
+  technicalSkills: z.array(z.string()).min(1, "At least one technical skill is required"),
+
   // Mentorship Preferences
-  mentorshipGoals: z.string().optional(),
-  preferredMentorshipAreas: z.array(z.string()).optional(),
-  availability: z.array(z.object({
-    day: z.string(),
-    startTime: z.string(),
-    endTime: z.string(),
-  })).optional(),
-  
+  mentorshipGoals: z.string().nonempty("Mentorship goals are required"),
+  preferredMentorshipAreas: z.array(z.string()).min(1, "At least one mentorship area is required"),
+  availability: z
+    .array(
+      z.object({
+        day: z.string().nonempty("Day is required"),
+        startTime: z.string().nonempty("Start time is required"),
+        endTime: z.string().nonempty("End time is required"),
+      })
+    )
+    .min(1, "At least one availability slot is required"),
+
   // Additional Information
-  linkedinUrl: z.string().url("Please enter a valid LinkedIn URL").optional().or(z.literal("")),
-  personalBio: z.string().optional(),
-  challenges: z.string().optional(),
-  languages: z.array(z.string()).optional(),
-  
+  linkedinUrl: z
+    .string()
+    .nonempty("LinkedIn URL is required")
+    .url("Please enter a valid LinkedIn URL"),
+  personalBio: z.string().nonempty("Personal bio is required"),
+  challenges: z.string().nonempty("Challenges are required"),
+  languages: z.array(z.string()).min(1, "At least one language is required"),
+
   // Terms
-  termsAgreed: z.boolean().optional(),
+  termsAgreed: z.boolean().refine(val => val === true, {
+    message: "You must agree to the Terms and Conditions",
+  }),
 });
 
 export type MenteeFormValues = z.infer<typeof menteeFormSchema>;
 
-export const defaultMenteeFormValues: Partial<MenteeFormValues> = {
+export const defaultMenteeFormValues: MenteeFormValues = {
   fullName: "",
   email: "",
   phone: "",
-  currentStatus: "student",
+  profilePhoto: "",
+  currentStatus: "student", // Must be one of the enum values.
   education: "",
   fieldOfStudy: "",
   careerGoals: "",
@@ -52,11 +62,18 @@ export const defaultMenteeFormValues: Partial<MenteeFormValues> = {
   technicalSkills: [],
   mentorshipGoals: "",
   preferredMentorshipAreas: [],
-  availability: [],
+  availability: [
+    {
+      day: "",
+      startTime: "",
+      endTime: "",
+    },
+  ],
   linkedinUrl: "",
   personalBio: "",
   challenges: "",
   languages: [],
+  termsAgreed: false, // Default is false, user must check to pass validation.
 };
 
 export const mentorshipAreaOptions = [

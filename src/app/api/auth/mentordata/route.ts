@@ -1,14 +1,14 @@
 import { NextResponse, NextRequest } from "next/server";
 import { dbConnect } from "@/lib/mongodb";
 import Mentor2 from "@/models/Mentor2";
+// Ensure the User model is registered by importing it
+import User from "@/models/User";
 import jwt, { JwtPayload } from "jsonwebtoken";
 
 export async function GET(req: NextRequest) {
   try {
-    // Connect to MongoDB
     await dbConnect();
 
-    // Get the token from cookies
     const token = req.cookies.get("token")?.value;
     if (!token) {
       return NextResponse.json(
@@ -17,7 +17,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Verify and decode the token
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET as string
@@ -29,20 +28,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Find mentor document by matching userId and convert to plain object using lean()
     const mentor = await Mentor2.findOne({ userId: decoded.id })
       .populate("userId", "username email age gender")
       .lean();
 
-    // Log the mentor data to verify the output
     console.log("Fetched mentor data:", mentor);
 
-    // If mentor does not exist, redirect to /Become-mentor
     if (!mentor) {
       return NextResponse.redirect(new URL("/BecomeMentor", req.url));
     }
 
-    // Return the mentor data if found
     return NextResponse.json({ success: true, data: mentor });
   } catch (error: any) {
     console.error("Error fetching mentor profile:", error);
