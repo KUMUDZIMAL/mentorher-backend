@@ -1,9 +1,18 @@
 import Groq from "groq-sdk";
 import { NextResponse } from 'next/server';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+function getGroqClient() {
+  const apiKey = process.env.GROQ_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY is missing");
+  }
+
+  return new Groq({ apiKey });
+}
 
 async function getGroqChatStream(userMessage: string) {
+  const groq = getGroqClient()
   return groq.chat.completions.create({
     messages: [
       {

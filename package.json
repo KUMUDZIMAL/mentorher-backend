@@ -28,5 +28,10 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "typescript": "^5"
+  },
+  "overrides": {
+    "react-server-dom-webpack": "^19.0.1",
+    "react-server-dom-parcel": "^19.0.1",
+    "react-server-dom-turbopack": "^19.0.1"
   }
 }
