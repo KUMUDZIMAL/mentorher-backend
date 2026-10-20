@@ -4,6 +4,7 @@ const { Schema } = mongoose;
 
 const RegistrationSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  eventId: { type: Schema.Types.ObjectId, ref: "Event", default: null, index: true },
   title: { type: String, required: true },
   date: { type: String, required: true },
   time: { type: String, required: true },

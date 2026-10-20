@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import '@/lib/dnsfix';
 import UserProfile from '@/models/userProfile';
 
 // Connect to MongoDB

@@ -5,6 +5,7 @@ export interface IMessage extends Document {
   receiver?: mongoose.Types.ObjectId;
   group?: mongoose.Types.ObjectId;
   content: string;
+  read: boolean;
   createdAt: Date;
 }
 
@@ -24,6 +25,8 @@ const MessageSchema: Schema = new Schema(
       required: function(this: IMessage) { return !this.receiver; }
     },
     content: { type: String, required: true },
+    // Direct messages start unread; group messages are considered read.
+    read: { type: Boolean, default: function (this: IMessage) { return Boolean(this.group); } },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

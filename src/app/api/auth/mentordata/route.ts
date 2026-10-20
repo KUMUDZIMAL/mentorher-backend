@@ -1,9 +1,12 @@
-import { NextResponse, NextRequest } from "next/server";
+﻿import { NextResponse, NextRequest } from "next/server";
 import { dbConnect } from "@/lib/mongodb";
 import Mentor2 from "@/models/Mentor2";
 // Ensure the User model is registered by importing it
 import User from "@/models/User";
 import jwt, { JwtPayload } from "jsonwebtoken";
+import { cacheGet, cacheSet } from "@/lib/cache";
+
+const MENTORDATA_TTL_SECONDS = 900; // 15 minutes
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,17 +31,30 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Auth verified - serve the per-user cache when warm.
+    const cacheKey = `me:mentor:${decoded.id}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     const mentor = await Mentor2.findOne({ userId: decoded.id })
       .populate("userId", "username email age gender")
       .lean();
 
-    console.log("Fetched mentor data:", mentor);
-
+    // If mentor does not exist, return JSON (never redirect an API call to an
+    // HTML page - cross-origin fetch follows cannot read it and CORS blocks it)
     if (!mentor) {
-      return NextResponse.redirect(new URL("/BecomeMentor", req.url));
+      return NextResponse.json(
+        { success: false, data: null, error: "Mentor profile not found" },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({ success: true, data: mentor });
+    const payload = { success: true, data: mentor };
+    await cacheSet(cacheKey, payload, MENTORDATA_TTL_SECONDS);
+
+    return NextResponse.json(payload);
   } catch (error: any) {
     console.error("Error fetching mentor profile:", error);
     return NextResponse.json(

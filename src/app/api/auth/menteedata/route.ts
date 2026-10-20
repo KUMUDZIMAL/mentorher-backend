@@ -1,7 +1,10 @@
-import { NextResponse, NextRequest } from "next/server";
+﻿import { NextResponse, NextRequest } from "next/server";
 import { dbConnect } from "@/lib/mongodb";
 import Mentee from "@/models/Mentee";
 import jwt, { JwtPayload } from "jsonwebtoken";
+import { cacheGet, cacheSet } from "@/lib/cache";
+
+const MENTEEDATA_TTL_SECONDS = 900; // 15 minutes
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,21 +32,32 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Auth verified - serve the per-user cache when warm.
+    const cacheKey = `me:mentee:${decoded.id}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     // Find mentee document by matching userId and convert to plain object using lean()
     const mentee = await Mentee.findOne({ userId: decoded.id })
       .populate("userId", "username email age gender")
       .lean();
 
-    // Log the mentee data to verify the output
-    console.log("Fetched mentee data:", mentee);
-
-    // If mentee does not exist, redirect to /Become-mentee
+    // If mentee does not exist, return JSON (never redirect an API call to an
+    // HTML page - cross-origin fetch follows cannot read it and CORS blocks it)
     if (!mentee) {
-      return NextResponse.redirect(new URL('/Become-mentee', req.url));
+      return NextResponse.json(
+        { success: false, data: null, error: "Mentee profile not found" },
+        { status: 404 }
+      );
     }
 
     // Return the mentee data if found
-    return NextResponse.json({ success: true, data: mentee });
+    const payload = { success: true, data: mentee };
+    await cacheSet(cacheKey, payload, MENTEEDATA_TTL_SECONDS);
+
+    return NextResponse.json(payload);
   } catch (error: any) {
     console.error("Error fetching mentee profile:", error);
     return NextResponse.json(

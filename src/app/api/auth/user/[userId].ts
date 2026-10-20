@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import mongoose from 'mongoose';
+import '@/lib/dnsfix';
 
 // Connect to MongoDB
 if (!mongoose.connection.readyState) {

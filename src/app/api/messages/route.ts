@@ -6,7 +6,7 @@ import { dbConnect } from "@/lib/mongodb";
 import Message from "@/models/Message";
 import Group from "@/models/Group";
 import mongoose from "mongoose";
-import UserProfileModel from "@/models/userProfile";
+import { dispatchNotification } from "@/lib/notifications";
 
 export async function GET(req: NextRequest) {
   await dbConnect();
@@ -59,18 +59,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid receiver ID format" }, { status: 400 });
     }
 
-    // Check follow relationship: allow messaging if current user follows receiver OR vice versa
-    const currentUserProfile = await UserProfileModel.findOne({ userId: currentUserId });
-    const receiverProfile = await UserProfileModel.findOne({ userId: receiverId });
-    const canMessage =
-      currentUserProfile?.following?.includes(receiverId) ||
-      receiverProfile?.following?.includes(currentUserId);
-
-    if (!canMessage) {
-      return NextResponse.json({ error: "You are not allowed to message this user" }, { status: 403 });
-    }
-
-    // Fetch messages between the two users
+    // Direct messaging — anyone authenticated can message anyone.
     const messages = await Message.find({
       $or: [
         { sender: currentUserId, receiver: receiverId },
@@ -134,6 +123,14 @@ export async function POST(req: NextRequest) {
         group: groupId,
         content,
       });
+      // Persisted — notify every participant (worker fans out, minus sender).
+      await dispatchNotification({
+        jobId: `notif:group_message.created:${newMessage._id}`,
+        type: "group_message.created",
+        actorId: currentUserId,
+        targetId: String(newMessage._id),
+        context: "group",
+      });
       return NextResponse.json({ message: "Message sent", newMessage }, { status: 201 });
     } catch (err) {
       console.error("Error creating group message:", err);
@@ -147,22 +144,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid receiver ID format" }, { status: 400 });
     }
 
-    // Check follow relationship as in GET endpoint
-    const currentUserProfile = await UserProfileModel.findOne({ userId: currentUserId });
-    const receiverProfile = await UserProfileModel.findOne({ userId: receiverId });
-    const canMessage =
-      currentUserProfile?.following?.includes(receiverId) ||
-      receiverProfile?.following?.includes(currentUserId);
-
-    if (!canMessage) {
-      return NextResponse.json({ error: "You are not allowed to message this user" }, { status: 403 });
-    }
-
+    // Direct message — anyone authenticated can message anyone.
     try {
       const newMessage = await Message.create({
         sender: currentUserId,
         receiver: receiverId,
         content,
+      });
+      // Persisted — notify the receiver (async, direct-write fallback if down).
+      await dispatchNotification({
+        jobId: `notif:dm.created:${newMessage._id}:${receiverId}`,
+        type: "dm.created",
+        actorId: currentUserId,
+        targetId: String(newMessage._id),
+        recipientId: receiverId,
+        context: "dm",
       });
       return NextResponse.json({ message: "Message sent", newMessage }, { status: 201 });
     } catch (err) {

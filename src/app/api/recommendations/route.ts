@@ -1,9 +1,11 @@
-// app/api/recommendations/route.ts
+﻿// app/api/recommendations/route.ts
 import { NextResponse } from "next/server";
 import { dbConnect } from "../../../lib/mongodb";
-import * as tf from "@tensorflow/tfjs";
 import Mentor2 from "../../../models/Mentor2";
 import Mentee from "../../../models/Mentee";
+import { cacheGet, cacheSet, getVersion } from "../../../lib/cache";
+
+const RECOMMENDATIONS_TTL_SECONDS = 1800; // 30 minutes
 
 // Combine key fields from a mentee into a single text string.
 const combineMentee = (mentee: any): string => {
@@ -56,12 +58,18 @@ const vectorizeText = (text: string, vocab: string[]): number[] => {
   return vector;
 };
 
-// Compute cosine similarity between two 1D tensors.
-const cosineSimilarityTensor = (vec1: tf.Tensor1D, vec2: tf.Tensor1D): number => {
-  const dotProduct = vec1.dot(vec2).dataSync()[0];
-  const norm1 = vec1.norm().dataSync()[0];
-  const norm2 = vec2.norm().dataSync()[0];
-  return (norm1 && norm2) ? dotProduct / (norm1 * norm2) : 0;
+// Compute cosine similarity between two vectors (plain JS - avoids loading
+// the heavy TensorFlow.js runtime on every request).
+const cosineSimilarity = (a: number[], b: number[]): number => {
+  let dot = 0;
+  let norm1 = 0;
+  let norm2 = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    norm1 += a[i] * a[i];
+    norm2 += b[i] * b[i];
+  }
+  return norm1 && norm2 ? dot / (Math.sqrt(norm1) * Math.sqrt(norm2)) : 0;
 };
 
 export async function GET(request: Request) {
@@ -79,6 +87,15 @@ export async function GET(request: Request) {
       );
     }
 
+    // Serve cached recommendations when available (invalidated whenever any
+    // mentor profile changes via the mentors version bump).
+    const ver = await getVersion("mentors");
+    const cacheKey = `rec:${ver}:${userId}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     // Retrieve the mentee profile using the provided userId.
     const mentee = await Mentee.findOne({ userId }).lean();
     if (!mentee) {
@@ -88,7 +105,9 @@ export async function GET(request: Request) {
     // Retrieve all mentor profiles.
     const mentors = await Mentor2.find({}).lean();
     if (!mentors || mentors.length === 0) {
-      return NextResponse.json({ error: "No mentors available" }, { status: 404 });
+      // No mentors in the database yet - return an empty list so the UI can
+      // render a proper empty state instead of an error.
+      return NextResponse.json({ recommendations: [] });
     }
 
     // Combine text fields for mentee and mentors.
@@ -100,13 +119,11 @@ export async function GET(request: Request) {
 
     // Vectorize the mentee text.
     const menteeVector = vectorizeText(menteeText, vocab);
-    const menteeTensor = tf.tensor1d(menteeVector);
 
     // Compute cosine similarity between the mentee and each mentor.
     const mentorSimilarities = mentors.map((mentor, index) => {
       const mentorVector = vectorizeText(mentorTexts[index], vocab);
-      const mentorTensor = tf.tensor1d(mentorVector);
-      const similarity = cosineSimilarityTensor(menteeTensor, mentorTensor);
+      const similarity = cosineSimilarity(menteeVector, mentorVector);
       return { mentor, similarity };
     });
 
@@ -117,7 +134,8 @@ export async function GET(request: Request) {
       .map(rec => ({
         similarity: rec.similarity,
         mentor: {
-          userId: rec.mentor.userId,
+          mentorId: String(rec.mentor._id),
+          userId: String(rec.mentor.userId),
           fullName: rec.mentor.fullName,
           email: rec.mentor.email,
           profilePhoto: rec.mentor.profilePhoto,
@@ -126,10 +144,14 @@ export async function GET(request: Request) {
           mentoringGoals: rec.mentor.mentoringGoals,
           technicalSkills: rec.mentor.technicalSkills,
           areasOfInterest: rec.mentor.areasOfInterest,
+          availability: rec.mentor.availability ?? [],
         }
       }));
 
-    return NextResponse.json({ recommendations });
+    const payload = { recommendations };
+    await cacheSet(cacheKey, payload, RECOMMENDATIONS_TTL_SECONDS);
+
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Error in GET /api/recommendations:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

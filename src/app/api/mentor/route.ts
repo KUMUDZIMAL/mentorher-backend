@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { dbConnect } from "@/lib/mongodb";
 import Mentor2 from "@/models/Mentor2";
 import jwt, { JwtPayload } from "jsonwebtoken";
+import { bumpVersion } from "@/lib/cache";
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,6 +43,8 @@ export async function POST(request: NextRequest) {
 
     // Create a new mentor profile if it does not exist
     const newMentor = await Mentor2.create(data);
+    // New mentor affects the public list, per-mentor profiles and recommendations.
+    await bumpVersion("mentors");
     return NextResponse.json({ success: true, mentor: newMentor }, { status: 201 });
   } catch (error: any) {
     console.error("Error in mentor API:", error);

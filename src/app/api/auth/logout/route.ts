@@ -3,12 +3,12 @@ import { serialize } from "cookie";
 
 export async function POST() {
   try {
-    // Clear the session or authentication token (cookie)
+    // Clear the session or authentication token (cookie).
+    // Attributes must match how login sets it, or the browser won't delete it.
     const cookie = serialize("token", "", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: 'none', // Allows cross-site requests
-
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       expires: new Date(0),
       path: "/",
     });

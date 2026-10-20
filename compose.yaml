@@ -1,0 +1,142 @@
+# MentorHer full stack — run from mentorher-backend/:
+#   cp .env.example .env   (first time only; set RABBITMQ_PASSWORD)
+#   docker compose up -d --build
+#
+# Data safety: volumes mongo-data + rabbitmq-data persist.
+# NEVER run `docker compose down -v` (it would delete all Mongo/RabbitMQ data).
+
+name: mentorher
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Cache only — persistence disabled on purpose (cold start is handled by cache.ts).
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-mentorher}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in mentorher-backend/.env (cp .env.example .env)}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    ports:
+      - "${RABBIT_UI_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  web:
+    build:
+      context: .
+    image: mentorher-backend:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
+    environment:
+      # environment: always wins over env_file — service DNS replaces any
+      # localhost/Atlas URLs that the local dev files contain.
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/mentorher
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-mentorher}:${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in mentorher-backend/.env (cp .env.example .env)}@rabbitmq:5672
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      # Core dependency only (MongoDB); Redis/RabbitMQ degrade gracefully at runtime.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    build:
+      context: .
+    image: mentorher-backend:local
+    restart: unless-stopped
+    command: ["node", "--import", "tsx", "worker/notification-worker.ts"]
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/mentorher
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-mentorher}:${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in mentorher-backend/.env (cp .env.example .env)}@rabbitmq:5672
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      # Process liveness only; the worker's own reconnect loop handles broker outages.
+      test: ["CMD-SHELL", "pgrep -f '[n]otification-worker' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ../mentorher-frontend
+      args:
+        # Browser calls the API on the host — must match BACKEND_PORT (also CORS allowlisted).
+        NEXT_PUBLIC_API_URL: http://localhost:${BACKEND_PORT:-3001}
+        NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME:-}
+        NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: ${NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET:-}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  mongo-data:
+    name: mentorher_mongo-data
+  rabbitmq-data:
+    name: mentorher_rabbitmq-data

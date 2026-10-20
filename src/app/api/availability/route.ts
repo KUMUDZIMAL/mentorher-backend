@@ -1,46 +1,82 @@
 // app/api/availability/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { dbConnect } from "@/lib/mongodb";
-import jwt, { JwtPayload } from "jsonwebtoken";
-import Mentor from "@/models/Mentor2"; // Adjust your import as needed
+import { getAuthUserId } from "@/lib/auth";
+import Mentor from "@/models/Mentor2";
+import { bumpVersion, cacheDel } from "@/lib/cache";
 
-export async function POST(request: NextRequest) {
-  await dbConnect();
-
-  // Retrieve and verify the token from cookies
-  const token = request.cookies.get("token")?.value;
-  if (!token) {
-    return NextResponse.json({ error: "No token provided" }, { status: 401 });
+/** GET /api/availability — the signed-in mentor's saved availability. */
+export async function GET(request: NextRequest) {
+  const userId = getAuthUserId(request);
+  if (!userId) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  let decoded: JwtPayload;
   try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload;
+    await dbConnect();
+    const mentor = await Mentor.findOne({ userId }).select("availability").lean();
+    if (!mentor) {
+      return NextResponse.json(
+        { success: false, error: "Mentor not found.", availability: [] },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json({
+      success: true,
+      availability: (mentor as any).availability ?? [],
+    });
   } catch (error) {
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    console.error("Error fetching availability:", error);
+    return NextResponse.json({ success: false, error: "Server error" }, { status: 500 });
   }
-  if (!decoded || !decoded.id) {
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+}
+
+/** POST /api/availability — replace the signed-in mentor's availability. */
+export async function POST(request: NextRequest) {
+  const userId = getAuthUserId(request);
+  if (!userId) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
   try {
+    await dbConnect();
     const body = await request.json();
     const { availability } = body;
+
     if (!availability || !Array.isArray(availability)) {
-      return NextResponse.json({ error: "Availability must be an array." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Availability must be an array." },
+        { status: 400 }
+      );
     }
-    // Update the mentor's availability
+
+    for (const slot of availability) {
+      if (!slot?.day || !slot?.startTime || !slot?.endTime) {
+        return NextResponse.json(
+          { success: false, error: "Each slot needs day, startTime and endTime." },
+          { status: 400 }
+        );
+      }
+    }
+
     const updatedMentor = await Mentor.findOneAndUpdate(
-      { userId: decoded.id },
+      { userId },
       { availability },
       { new: true }
     );
     if (!updatedMentor) {
-      return NextResponse.json({ error: "Mentor not found." }, { status: 404 });
+      return NextResponse.json({ success: false, error: "Mentor not found." }, { status: 404 });
     }
-    return NextResponse.json({ message: "Availability updated", mentor: updatedMentor });
+    // Availability is part of the public mentor payloads — invalidate them.
+    await bumpVersion("mentors");
+    await cacheDel(`me:mentor:${userId}`);
+    return NextResponse.json({
+      success: true,
+      message: "Availability updated",
+      availability: updatedMentor.availability ?? [],
+    });
   } catch (error) {
     console.error("Error updating availability:", error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Server error" }, { status: 500 });
   }
 }

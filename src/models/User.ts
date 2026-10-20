@@ -6,7 +6,8 @@ export interface IUser extends Document {
   age: number; // Make age optional, and save it from the registration form
   gender: string;
   password: string;
-
+  resetToken?: string;
+  resetTokenExpiry?: Date;
 }
 
 const UserSchema: Schema<IUser> = new Schema(
@@ -14,8 +15,10 @@ const UserSchema: Schema<IUser> = new Schema(
     username: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
     age: { type: Number }, // Age is still part of the schema
-    gender: { type: String, default:'Female', required:false}, 
+    gender: { type: String, default:'Female', required:false},
     password: { type: String, required: true },
+    resetToken: { type: String, select: false },
+    resetTokenExpiry: { type: Date, select: false },
   },
   { timestamps: true }
 );
